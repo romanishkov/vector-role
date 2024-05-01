@@ -1,21 +1,89 @@
 ---
 # tasks file for vector-role
-- name: Get Vector distrib
+# - name: Get Vector distrib
+#   ansible.builtin.get_url:
+#     url: "https://yum.vector.dev/stable/vector-0/x86_64/vector-{{ vector_version }}.x86_64.rpm"
+#     dest: "./vector-{{ vector_version }}.rpm"
+# - name: Install Vector package
+#   become: true
+#   ansible.builtin.yum:
+#     disable_gpg_check: true
+#     name:
+#       - vector-{{ vector_version }}.rpm
+
+- name: facts
+  ansible.builtin.gather_facts:
+
+- debug:
+    var: ansible_os_family
+
+- name: check vecktor repo debian
+  stat:
+    path: /etc/apt/sources.list.d/vector.list
+  register: deb
+  # when: ansible_os_family == "Debian"
+
+- name: check vecktor repo redhat
+  stat:
+    path: /etc/yum.repos.d/vector.repo 
+  register: rh
+  # when: ansible_os_family == "RedHat"
+
+- debug:
+    var: deb.stat.exists
+
+- debug:
+    var: rh.stat.exists
+
+- name: Download Vector repo installer script
   ansible.builtin.get_url:
-    url: "https://yum.vector.dev/stable/vector-0/x86_64/vector-{{ vector_version }}.x86_64.rpm"
-    dest: "./vector-{{ vector_version }}.rpm"
+    url: https://setup.vector.dev
+    dest: /etc/vector_repo.sh
+
+- name: Install Vector repo
+  become: true
+  ansible.builtin.command: bash /etc/vector_repo.sh
+  when: ((not deb.stat.exists) and ansible_os_family == "Debian") or ((not rh.stat.exists) and ansible_os_family == "RedHat")
+
+
+# - debug:
+#     var: ansible_facts
+
+
+
+- name: Fix repo mirrorlist on CentOS 7 and 8 systems
+  shell: |
+      sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
+      sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
+  when: ansible_facts['distribution'] == "CentOS" and (ansible_facts['distribution_major_version'] == "7" or
+        ansible_facts['distribution_major_version'] == "8")
+
 - name: Install Vector package
   become: true
-  ansible.builtin.yum:
-    disable_gpg_check: true
-    name:
-      - vector-{{ vector_version }}.rpm
+  ansible.builtin.package:
+    name: vector
 - name: Write config using jinja2
   become: true
   ansible.builtin.template:
     src: templates/vector.j2
     dest: /etc/vector/vector.yaml
     mode: 0644
-  notify: Start Vector service
-- name: Flush handlers
-  meta: flush_handlers
+
+# - name: Pause for test
+#   ansible.builtin.pause:
+    # seconds: None
+  # notify: Start Vector service
+
+- name: Pause for test
+  ansible.builtin.pause:
+
+
+- name: Start Vector service
+  become: true
+  ansible.builtin.service:
+    name: vector
+    state: restarted
+  # ansible.builtin.command: vector --config /etc/vector/vector.yaml
+
+# - name: Flush handlers
+#   meta: flush_handlers

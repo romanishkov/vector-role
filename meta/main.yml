@@ -1,5 +1,6 @@
 galaxy_info:
-  author: Roman Ishkov
+  role_name: vector
+  author: romanishkov
   description: This role install Vector on EL
   company: Netology
 
